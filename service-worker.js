@@ -1,11 +1,14 @@
-// JANNAH Service Worker - Version 1.0
-const CACHE_NAME = 'jannah-v1';
+// JANNAH Service Worker - Production Version
+const CACHE_NAME = 'jannah-v1.0.0';
+const RUNTIME_CACHE = 'jannah-runtime-v1';
+
+// Essential files to cache on install
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 // Install event - cache essential files
@@ -13,11 +16,11 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('JANNEH: Cache opened');
-        return cache.addAll(urlsToCache.map(url => new Request(url, {cache: 'reload'})));
+        console.log('JANNAH: Opened cache');
+        return cache.addAll(urlsToCache);
       })
       .catch(err => {
-        console.log('JANNEH: Cache failed', err);
+        console.error('JANNAH: Cache failed during install', err);
       })
   );
   self.skipWaiting();
@@ -29,8 +32,8 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('JANNEH: Deleting old cache', cacheName);
+          if (cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
+            console.log('JANNAH: Deleting old cache', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -40,65 +43,72 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - Network first for APIs, Cache first for assets
 self.addEventListener('fetch', event => {
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
-    // For API requests, try network first, then cache
-    if (event.request.url.includes('api.alquran.cloud') || 
-        event.request.url.includes('api.aladhan.com')) {
-      event.respondWith(
-        fetch(event.request)
-          .then(response => {
-            // Cache successful API responses
-            if (response.ok) {
-              const responseToCache = response.clone();
-              caches.open(CACHE_NAME).then(cache => {
-                cache.put(event.request, responseToCache);
+  const url = new URL(event.request.url);
+  
+  // Handle API requests - Network first with cache fallback
+  if (url.hostname.includes('api.alquran.cloud') || url.hostname.includes('api.aladhan.com')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Clone and cache successful responses
+          if (response && response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(RUNTIME_CACHE).then(cache => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // Network failed, try cache
+          return caches.match(event.request)
+            .then(cachedResponse => {
+              if (cachedResponse) {
+                return cachedResponse;
+              }
+              // Return a custom offline response for APIs
+              return new Response(JSON.stringify({
+                error: 'Offline',
+                message: 'No internet connection. Please try again when online.'
+              }), {
+                headers: { 'Content-Type': 'application/json' }
               });
-            }
-            return response;
-          })
-          .catch(() => {
-            // If network fails, try cache
-            return caches.match(event.request);
-          })
-      );
-      return;
-    }
-    
-    // For other external resources (fonts, etc), network only
-    event.respondWith(fetch(event.request));
+            });
+        })
+    );
     return;
   }
-
-  // For same-origin requests, cache first, then network
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          console.log('JANNEH: Serving from cache', event.request.url);
-          return response;
-        }
-        
-        return fetch(event.request).then(response => {
-          // Don't cache if not a success response
-          if (!response || response.status !== 200 || response.type === 'error') {
-            return response;
+  
+  // Handle app assets - Cache first with network fallback
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(event.request)
+        .then(cachedResponse => {
+          if (cachedResponse) {
+            return cachedResponse;
           }
-
-          // Clone the response
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME)
-            .then(cache => {
-              cache.put(event.request, responseToCache);
+          
+          return fetch(event.request).then(response => {
+            if (!response || response.status !== 200 || response.type === 'error') {
+              return response;
+            }
+            
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, responseClone);
             });
-
-          return response;
-        });
-      })
-  );
+            
+            return response;
+          });
+        })
+    );
+    return;
+  }
+  
+  // For everything else, just fetch
+  event.respondWith(fetch(event.request));
 });
 
 // Handle messages from the client
