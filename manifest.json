@@ -1,0 +1,35 @@
+{
+  "name": "JANNAH HAMIDOU - Islamic Education",
+  "short_name": "JANNAH",
+  "description": "Your complete Islamic education companion with Qur'an, Hadith, Du'a, Prayer Tracker, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot1.png",
+      "sizes": "540x720",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["education", "lifestyle", "books"],
+  "lang": "en-US",
+  "dir": "ltr"
+}
